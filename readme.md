@@ -1,4 +1,4 @@
-# Freight Rate Prediction Challenge
+# Freight Rate Prediction 
 
 Machine learning pipeline for spot freight rate forecasting across US trucking lanes, designed for out-of-sample forward horizon prediction (November/December 2025).
 
