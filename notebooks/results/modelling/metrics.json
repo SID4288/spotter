@@ -1,0 +1,125 @@
+{
+  "Fold 1 (Jul-Aug)": {
+    "clean_mae": 58.45,
+    "clean_rmse": 82.04,
+    "clean_mape_pct": 2.46,
+    "all_row_mae": 110.42
+  },
+  "Fold 2 (Aug-Sep)": {
+    "clean_mae": 59.27,
+    "clean_rmse": 84.89,
+    "clean_mape_pct": 2.53,
+    "all_row_mae": 109.73
+  },
+  "Fold 3 (Sep-Oct)": {
+    "clean_mae": 75.44,
+    "clean_rmse": 103.56,
+    "clean_mape_pct": 3.19,
+    "all_row_mae": 131.04
+  },
+  "Fold 4 (Oct only)": {
+    "clean_mae": 84.73,
+    "clean_rmse": 111.75,
+    "clean_mape_pct": 3.58,
+    "all_row_mae": 144.63
+  },
+  "ablation_market_index": {
+    "with_market_index": {
+      "Fold 1 (Jul-Aug)": {
+        "clean_mae": 58.45,
+        "clean_rmse": 82.04,
+        "clean_mape_pct": 2.46,
+        "all_row_mae": 110.42
+      },
+      "Fold 2 (Aug-Sep)": {
+        "clean_mae": 59.27,
+        "clean_rmse": 84.89,
+        "clean_mape_pct": 2.53,
+        "all_row_mae": 109.73
+      },
+      "Fold 3 (Sep-Oct)": {
+        "clean_mae": 75.44,
+        "clean_rmse": 103.56,
+        "clean_mape_pct": 3.19,
+        "all_row_mae": 131.04
+      },
+      "Fold 4 (Oct only)": {
+        "clean_mae": 84.73,
+        "clean_rmse": 111.75,
+        "clean_mape_pct": 3.58,
+        "all_row_mae": 144.63
+      }
+    },
+    "without_market_index": {
+      "Fold 1 (Jul-Aug)": {
+        "clean_mae": 71.98,
+        "clean_rmse": 105.65,
+        "clean_mape_pct": 2.97,
+        "all_row_mae": 123.67
+      },
+      "Fold 2 (Aug-Sep)": {
+        "clean_mae": 45.47,
+        "clean_rmse": 66.26,
+        "clean_mape_pct": 1.93,
+        "all_row_mae": 96.09
+      },
+      "Fold 3 (Sep-Oct)": {
+        "clean_mae": 48.72,
+        "clean_rmse": 70.32,
+        "clean_mape_pct": 2.08,
+        "all_row_mae": 104.7
+      },
+      "Fold 4 (Oct only)": {
+        "clean_mae": 50.88,
+        "clean_rmse": 72.99,
+        "clean_mape_pct": 2.17,
+        "all_row_mae": 111.37
+      }
+    },
+    "denoised_daily_median": {
+      "Fold 1 (Jul-Aug)": {
+        "clean_mae": 58.94,
+        "clean_rmse": 82.27,
+        "clean_mape_pct": 2.49,
+        "all_row_mae": 110.9
+      },
+      "Fold 2 (Aug-Sep)": {
+        "clean_mae": 63.51,
+        "clean_rmse": 90.62,
+        "clean_mape_pct": 2.7,
+        "all_row_mae": 113.91
+      },
+      "Fold 3 (Sep-Oct)": {
+        "clean_mae": 78.93,
+        "clean_rmse": 108.14,
+        "clean_mape_pct": 3.33,
+        "all_row_mae": 134.49
+      },
+      "Fold 4 (Oct only)": {
+        "clean_mae": 87.37,
+        "clean_rmse": 115.15,
+        "clean_mape_pct": 3.68,
+        "all_row_mae": 147.28
+      }
+    }
+  },
+  "Unseen-city holdout (Sep-Oct)": {
+    "clean_mae": 89.97,
+    "clean_rmse": 118.02,
+    "clean_mape_pct": 3.49,
+    "all_row_mae": 150.83,
+    "held_out_cities": [
+      "Jacksonville",
+      "Little Rock",
+      "Los Angeles",
+      "New Orleans",
+      "Oklahoma City",
+      "Tucson"
+    ]
+  },
+  "december_mean_rate": 823.25,
+  "december_peak": {
+    "date": "2025-12-31",
+    "rate": 833.69
+  }
+}
