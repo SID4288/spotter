@@ -1,3 +1,20 @@
+"""Freight-rate training pipeline (production-ready, deterministic).
+
+Pipeline: WeightDistanceImputer -> MarketImputer -> FeatureEngineer
+          -> ColumnSelector -> DollarHGBRegressor (HGB + Duan smearing).
+
+Key production properties
+* Inductive only: imputers learn frozen lookups from train; single-row
+  inference == batch inference (see preprocessing.py).
+* Outlier flag (6*MAD quadratic log-log) is training-only; inference path
+  (pipe.predict / predict.py) never drops or flags live rows.
+* Dollar-aware: HGB fits log(rate/mile) with sample_weight=distance and
+  Duan smearing, so exp(pred)*distance is unbiased in $ space.
+* Artifact (output/pipeline.joblib) uses preprocessing/modeling classes so
+  plain joblib.load works in microservices (no __main__ hack needed for
+  new artifacts; load_pipeline keeps backward-compat for the old 800MB ET).
+"""
+
 from __future__ import annotations
 
 import json
@@ -6,10 +23,20 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
+
+from modeling import DollarHGBRegressor
+from preprocessing import (
+    CAT_FEATURES,
+    EQUIPMENT_CODE,
+    MODEL_FEATURES,
+    NUM_FEATURES,
+    ColumnSelector,
+    FeatureEngineer,
+    MarketImputer,
+    WeightDistanceImputer,
+)
 
 ROOT = Path(__file__).resolve().parent
 DATA, OUT = ROOT / "data", ROOT / "output"
@@ -17,27 +44,26 @@ METRICS = ROOT / "notebooks" / "results" / "modelling" / "metrics.json"
 PIPE_PATH = OUT / "pipeline.joblib"
 SEED = 42
 
-EQUIPMENT_CODE = {"Dry Van": 0, "Reefer": 1, "Flatbed": 2}
-# Dropped vs original: geo_distance (corr 1.00 with distance),
-# day_of_week/day_of_month raw ints (replaced by cyclic encodings).
-FEATURES = [
-    "pickup_lat", "pickup_lon", "delivery_lat", "delivery_lon",
-    "distance", "circuity",
-    "weight", "weight_per_mile", "equipment_code", "lane_freq", "market_index",
-    "days_to_quarter_end", "dow_sin", "dow_cos", "doy_sin", "doy_cos",
-    "equip_x_logdist", "is_weekend",
-]
+# Backward-compat aliases (tests / notebooks import these from train).
+FEATURES = NUM_FEATURES
 FEATURES_NO_MARKET = [f for f in FEATURES if f != "market_index"]
 
 REQUIRED_INPUTS = ["pickup", "delivery", "pickup_lat", "pickup_lon",
                    "delivery_lat", "delivery_lon", "distance", "equipment",
                    "weight", "date", "market_index"]
+FORBIDDEN_INFERENCE_COLS = {"quote_signal"}  # unstable across horizon; must not reach model.
 
 
 def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
+    """Canonical input repair (runs before validation)."""
     df = df.copy()
-    df["weight"] = df["weight"].abs()  # sign-flipped weights (~0.6% of rows)
-    df.loc[df["distance"] <= 0, "distance"] = np.nan
+    if "weight" in df:
+        df["weight"] = df["weight"].abs()  # sign-flipped weights (~0.6% of rows)
+    if "distance" in df:
+        df.loc[df["distance"] <= 0, "distance"] = np.nan
+    # quote_signal is excluded by design (unstable across horizon); drop
+    # defensively so downstream code cannot accidentally use it.
+    df = df.drop(columns=[c for c in FORBIDDEN_INFERENCE_COLS if c in df.columns])
     return df
 
 
@@ -60,137 +86,67 @@ def _apply_flag(df: pd.DataFrame, coef, med: float, mad: float) -> pd.Series:
 
 
 def flag_corrupt_labels(df: pd.DataFrame) -> pd.Series:
-    """Backward-compatible: fit + apply on the same frame.
+    """Training-only label cleaner. NEVER call on live inference rows.
 
     Use only for the full-train final fit. Inside CV use _flag_params(tr)
     fitted on the training fold and _apply_flag(va, ...) for scoring.
+    Inference (pipe.predict / predict.py) bypasses this entirely.
     """
     coef, med, mad = _flag_params(df)
     return _apply_flag(df, coef, med, mad)
 
 
-def haversine(lat1, lon1, lat2, lon2):
-    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
-    a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
-    return 3958.8 * 2 * np.arcsin(np.sqrt(a))
-
-
-def days_to_quarter_end(dates: pd.Series) -> pd.Series:
-    """Vectorized quarter-end countdown (no per-row to_period)."""
-    em = ((dates.dt.month - 1) // 3) * 3 + 3
-    qend = pd.to_datetime(pd.DataFrame({
-        "year": dates.dt.year, "month": em,
-        "day": em.map({3: 31, 6: 30, 9: 30, 12: 31}),
-    }))
-    return (qend - dates.dt.normalize()).dt.days
-
-
 def validate_frame(df: pd.DataFrame, require_label: bool = False) -> None:
+    """Strict schema gate. Raises ValueError with actionable messages.
+
+    * Missing required columns -> raise (lists culprits).
+    * Forbidden columns (quote_signal) -> raise (must be dropped upstream).
+    * distance <= 0 (non-NaN) -> raise (basic_clean should have mapped to
+      NaN for imputation; a surviving <=0 means cleaning was skipped).
+    * Negative weight -> raise (basic_clean abs() was skipped).
+    * Unparseable date -> raise. NaN distance/weight/market_index are
+      ALLOWED (imputers handle them); everything else must be present.
+    * require_label=True: posted_rate must exist, finite, > 0.
+    """
     missing = [c for c in REQUIRED_INPUTS if c not in df.columns]
     if missing:
         raise ValueError(f"missing input columns: {missing}")
+    forbidden = [c for c in FORBIDDEN_INFERENCE_COLS if c in df.columns]
+    if forbidden:
+        raise ValueError(
+            f"forbidden columns present {forbidden}: drop quote_signal upstream "
+            "(unstable across horizon; see modelling notes)"
+        )
     if require_label and "posted_rate" not in df.columns:
         raise ValueError("posted_rate required but missing")
-    if df["distance"].isna().any() or (df["distance"] <= 0).any():
-        # basic_clean turns <=0 into NaN; imputation fills it later.
-        pass
-
-
-class WeightDistanceImputer(BaseEstimator, TransformerMixin):
-    """Fill weight (equipment median) and distance (global median)."""
-
-    def fit(self, X: pd.DataFrame, y=None):
-        self.eq_weight_ = X.groupby("equipment")["weight"].median() if "equipment" in X else pd.Series(dtype=float)
-        self.global_weight_ = X["weight"].median() if "weight" in X else 30000.0
-        self.distance_median_ = X["distance"].median() if "distance" in X else 1000.0
-        return self
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        X = X.copy()
-        if "weight" in X:
-            m = X["weight"].isna()
-            if m.any():
-                fill = X.loc[m, "equipment"].map(self.eq_weight_).fillna(self.global_weight_) \
-                    if "equipment" in X else self.global_weight_
-                X.loc[m, "weight"] = fill
-        if "distance" in X:
-            X["distance"] = X["distance"].mask(X["distance"] <= 0).fillna(self.distance_median_)
-        return X
-
-
-class MarketImputer(BaseEstimator, TransformerMixin):
-    """Train lookups + batch own-date/month fallback (inputs only, never labels)."""
-
-    def fit(self, X: pd.DataFrame, y=None):
-        self.date_map_ = X.groupby("date")["market_index"].median().to_dict() if "market_index" in X else {}
-        self.month_map_ = X.groupby(X["date"].dt.strftime("%Y-%m"))["market_index"].median().to_dict() \
-            if "market_index" in X else {}
-        self.global_ = X["market_index"].median() if "market_index" in X else 1.0
-        return self
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        X = X.copy()
-        if "market_index" not in X:
-            return X
-        m = X["market_index"].isna()
-        if m.any():
-            X.loc[m, "market_index"] = X.loc[m, "date"].map(self.date_map_)
-        m = X["market_index"].isna()
-        if m.any():
-            X.loc[m, "market_index"] = X.loc[m, "date"].map(X.groupby("date")["market_index"].median())
-        m = X["market_index"].isna()
-        if m.any():
-            X.loc[m, "market_index"] = X.loc[m, "date"].dt.strftime("%Y-%m").map(self.month_map_)
-        m = X["market_index"].isna()
-        if m.any():
-            X.loc[m, "market_index"] = X.loc[m, "date"].dt.strftime("%Y-%m").map(
-                X.groupby(X["date"].dt.strftime("%Y-%m"))["market_index"].median())
-        X["market_index"] = X["market_index"].fillna(self.global_)
-        return X
-
-
-class FeatureEngineer(BaseEstimator, TransformerMixin):
-    """Geo + date + interaction features. Fit stores lane frequencies only."""
-
-    def fit(self, X: pd.DataFrame, y=None):
-        if "pickup" in X and "delivery" in X:
-            self.lane_freq_ = (X["pickup"].astype(str) + "__" + X["delivery"].astype(str)).value_counts()
-        else:
-            self.lane_freq_ = pd.Series(dtype=float)
-        return self
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        X = X.copy()
-        geo = haversine(X["pickup_lat"], X["pickup_lon"], X["delivery_lat"], X["delivery_lon"])
-        ratio = X["distance"] / np.maximum(geo, 1e-6)
-        X["circuity"] = ratio.clip(1.0, 2.0).fillna(1.18)
-        # compat alias (old name, clipped)
-        X["distance_ratio"] = X["circuity"]
-        X["geo_distance"] = geo
-        X["weight_per_mile"] = X["weight"] / np.maximum(X["distance"], 1e-6)
-        X["equipment_code"] = X["equipment"].map(EQUIPMENT_CODE).fillna(-1).astype(int) \
-            if "equipment" in X else -1
-        if "pickup" in X and "delivery" in X:
-            X["lane_freq"] = (X["pickup"].astype(str) + "__" + X["delivery"].astype(str)) \
-                .map(self.lane_freq_).fillna(0)
-        else:
-            X["lane_freq"] = 0
-        X["days_to_quarter_end"] = days_to_quarter_end(X["date"])
-        dow = X["date"].dt.dayofweek
-        doy = X["date"].dt.dayofyear
-        X["dow_sin"] = np.sin(2 * np.pi * dow / 7)
-        X["dow_cos"] = np.cos(2 * np.pi * dow / 7)
-        X["doy_sin"] = np.sin(2 * np.pi * doy / 365.25)
-        X["doy_cos"] = np.cos(2 * np.pi * doy / 365.25)
-        X["equip_x_logdist"] = X["equipment_code"] * np.log(np.maximum(X["distance"], 1e-6))
-        X["day_of_week"] = dow  # compat; excluded from FEATURES
-        X["day_of_month"] = X["date"].dt.day  # compat; excluded from FEATURES
-        X["is_weekend"] = (dow >= 5).astype(int)
-        return X
+    # Distance: NaN allowed (imputed), but concrete <= 0 is a pipeline bug.
+    dist = pd.to_numeric(df["distance"], errors="coerce")
+    bad_dist = (dist.notna() & (dist <= 0)).sum()
+    if int(bad_dist):
+        raise ValueError(
+            f"distance must be > 0 or NaN (imputable); found {int(bad_dist)} rows <= 0. "
+            "Run basic_clean first."
+        )
+    # Weight: NaN allowed, negative is not.
+    w = pd.to_numeric(df["weight"], errors="coerce")
+    neg_w = (w.notna() & (w < 0)).sum()
+    if int(neg_w):
+        raise ValueError(
+            f"weight must be >= 0 or NaN; found {int(neg_w)} negative rows. Run basic_clean first."
+        )
+    dates = pd.to_datetime(df["date"], errors="coerce")
+    if dates.isna().any():
+        raise ValueError(f"date contains {int(dates.isna().sum())} unparseable values")
+    if require_label:
+        pr = pd.to_numeric(df["posted_rate"], errors="coerce")
+        if pr.isna().any():
+            raise ValueError("posted_rate contains NaN/non-numeric values")
+        if bool((pr <= 0).any()):
+            raise ValueError("posted_rate must be > 0")
 
 
 def fit_preprocessors(train_df: pd.DataFrame) -> dict:
-    """Backward-compatible prep dict (inputs only, all rows — labels don't set input medians)."""
+    """Fit inductive preprocessors on training inputs only."""
     w = WeightDistanceImputer().fit(train_df)
     m = MarketImputer().fit(train_df)
     f = FeatureEngineer().fit(train_df)
@@ -203,38 +159,34 @@ def fit_preprocessors(train_df: pd.DataFrame) -> dict:
 
 
 def transform(df: pd.DataFrame, prep: dict) -> pd.DataFrame:
+    """Apply frozen preprocessors (no peeking at batch statistics)."""
     df = df.copy()
-    # New pipeline path
     if "_w" in prep:
         df = prep["_w"].transform(df)
         df = prep["_m"].transform(df)
         df = prep["_f"].transform(df)
         return df
-    # Legacy dict path (kept for old pickles): vectorized, hardened version
+    # Legacy dict path (old pickles): inductive fallback ladder only.
     m = df["weight"].isna()
     if m.any():
         df.loc[m, "weight"] = df.loc[m, "equipment"].map(prep["eq_weight"]).fillna(prep["global_weight"])
     if "distance_median" in prep:
         df["distance"] = df["distance"].mask(df["distance"] <= 0).fillna(prep["distance_median"])
+    # Market: exact-date -> month -> global (no batch groupby).
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
     m = df["market_index"].isna()
     if m.any():
         df.loc[m, "market_index"] = df.loc[m, "date"].map(prep["date_market"])
     m = df["market_index"].isna()
     if m.any():
-        df.loc[m, "market_index"] = df.loc[m, "date"].map(df.groupby("date")["market_index"].median())
-    m = df["market_index"].isna()
-    if m.any():
         key = df.loc[m, "date"].dt.strftime("%Y-%m")
-        month_map = prep["month_market"]
         try:
-            df.loc[m, "market_index"] = key.map(month_map)
+            df.loc[m, "market_index"] = key.map(prep["month_market"])
         except Exception:
             df.loc[m, "market_index"] = np.nan
-    m = df["market_index"].isna()
-    if m.any():
-        df.loc[m, "market_index"] = df.loc[m, "date"].dt.strftime("%Y-%m").map(
-            df.groupby(df["date"].dt.strftime("%Y-%m"))["market_index"].median())
     df["market_index"] = df["market_index"].fillna(prep["global_market"])
+    # Reuse canonical feature logic via a fitted engineer when possible.
+    from preprocessing import days_to_quarter_end, haversine
     geo = haversine(df["pickup_lat"], df["pickup_lon"], df["delivery_lat"], df["delivery_lon"])
     df["geo_distance"] = geo
     df["circuity"] = (df["distance"] / np.maximum(geo, 1e-6)).clip(1.0, 2.0).fillna(1.18)
@@ -255,12 +207,19 @@ def transform(df: pd.DataFrame, prep: dict) -> pd.DataFrame:
     df["day_of_week"] = dow
     df["day_of_month"] = df["date"].dt.day
     df["is_weekend"] = (dow >= 5).astype(int)
+    for col, cats in (("pickup_cat", "pickup"), ("delivery_cat", "delivery"), ("equipment_cat", "equipment")):
+        df[col] = pd.Categorical(df[cats]) if cats in df else pd.Categorical([np.nan] * len(df))
     return df
 
 
-def make_model() -> ExtraTreesRegressor:
-    return ExtraTreesRegressor(n_estimators=300, min_samples_leaf=2, max_features="sqrt",
-                               n_jobs=-1, random_state=SEED)
+def make_model() -> DollarHGBRegressor:
+    """Compact HGB (~10-25MB) with smearing + native categoricals."""
+    return DollarHGBRegressor(
+        max_iter=300, max_leaf_nodes=63, learning_rate=0.05,
+        min_samples_leaf=20, l2_regularization=1.0,
+        categorical_features="from_dtype", early_stopping=False,
+        random_state=SEED,
+    )
 
 
 def make_pipeline() -> Pipeline:
@@ -268,8 +227,31 @@ def make_pipeline() -> Pipeline:
         ("weight_distance", WeightDistanceImputer()),
         ("market", MarketImputer()),
         ("features", FeatureEngineer()),
+        ("select", ColumnSelector(columns=MODEL_FEATURES)),
         ("model", make_model()),
     ])
+
+
+def load_pipeline(path: Path | str = PIPE_PATH):
+    """Load artifact. New artifacts: plain joblib.load. Old 800MB ET: fallback alias."""
+    try:
+        import preprocessing  # noqa: F401  ensure unpickling namespace present
+        import modeling  # noqa: F401
+        return joblib.load(path)
+    except AttributeError as exc:
+        # Backward-compat for artifacts dumped from __main__ (old train.py).
+        import sys
+        import __main__ as _main
+        import preprocessing as _pp
+        import modeling as _mo
+        for _name in ("WeightDistanceImputer", "MarketImputer", "FeatureEngineer", "ColumnSelector"):
+            setattr(_main, _name, getattr(_pp, _name))
+        setattr(_main, "DollarHGBRegressor", _mo.DollarHGBRegressor)
+        sys.modules.setdefault("train", sys.modules[__name__])
+        try:
+            return joblib.load(path)
+        except Exception:
+            raise exc
 
 
 def _train_mask(train_df: pd.DataFrame) -> np.ndarray:
@@ -282,43 +264,65 @@ def _train_mask(train_df: pd.DataFrame) -> np.ndarray:
     return _apply_flag(train_df, coef, med, mad).to_numpy()
 
 
+def _distance_weights(df: pd.DataFrame, median_fill: float | None = None) -> np.ndarray:
+    d = pd.to_numeric(df["distance"], errors="coerce")
+    if median_fill is not None:
+        d = d.mask((d.isna()) | (d <= 0)).fillna(median_fill)
+    else:
+        d = d.fillna(d.median())
+    return np.maximum(d.to_numpy(dtype=float), 1.0)
+
+
 def fit_predict(train_df: pd.DataFrame, target_df: pd.DataFrame,
                 features: list[str] | None = None,
                 denoised_market: bool = False) -> np.ndarray:
+    """Functional training path (mirrors pipeline; dollar-weighted + smeared).
+
+    Args:
+        features: numeric subset for ablations (categoricals always appended
+            so HGB keeps native handling).
+    """
     prep = fit_preprocessors(train_df)
     tr, te = transform(train_df, prep), transform(target_df, prep)
     if denoised_market:
         tr["market_index"] = tr["date"].map(prep["_m"].date_map_).fillna(prep["global_market"])
-        own = te.groupby("date")["market_index"].median()
+        own_month = te["date"].dt.strftime("%Y-%m").map(
+            target_df.assign(market_index=target_df["market_index"]).groupby(
+                target_df["date"].astype(str).str.slice(0, 7))["market_index"].median()
+        ) if False else None  # disabled: transductive; kept for API compat
+        _ = own_month
         te["market_index"] = te["date"].map(prep["_m"].date_map_)
-        missing = te["market_index"].isna()
-        te.loc[missing, "market_index"] = te.loc[missing, "date"].map(own)
         te["market_index"] = te["market_index"].fillna(prep["global_market"])
-    feats = FEATURES if features is None else features
+    num_feats = FEATURES if features is None else [f for f in features if f in FEATURES]
+    feats = num_feats + [c for c in CAT_FEATURES if c in tr.columns]
     mask = _train_mask(train_df)
-    # align mask to transformed rows (same order/index for train)
     tr_clean = tr[~pd.Series(mask, index=train_df.index).reindex(tr.index).fillna(False).to_numpy()]
-    model = make_model().fit(tr_clean[feats], np.log(tr_clean["posted_rate"] / tr_clean["distance"]))
+    w = _distance_weights(tr_clean)
+    model = make_model().fit(tr_clean[feats], np.log(tr_clean["posted_rate"] / tr_clean["distance"]),
+                             sample_weight=w)
+    # predict() already adds log(smearing); multiply back by distance.
     return np.exp(model.predict(te[feats])) * te["distance"].to_numpy()
 
 
 def tune(train_df: pd.DataFrame, n_iter: int = 12) -> dict:
     """Efficient tuning: RandomizedSearchCV + TimeSeriesSplit (past -> future only)."""
     mask = _train_mask(train_df)
-    df = train_df[~mask]
+    df = train_df[~mask].copy()
     pipe = Pipeline([
         ("weight_distance", WeightDistanceImputer()),
         ("market", MarketImputer()),
         ("features", FeatureEngineer()),
-        ("model", ExtraTreesRegressor(random_state=SEED, n_jobs=-1)),
+        ("select", ColumnSelector(columns=MODEL_FEATURES)),
+        ("model", DollarHGBRegressor(random_state=SEED)),
     ])
     rs = RandomizedSearchCV(
         pipe,
-        {"model__n_estimators": [300, 500], "model__min_samples_leaf": [1, 2, 5],
-         "model__max_features": ["sqrt", 0.5, 1.0], "model__min_samples_split": [2, 5]},
+        {"model__max_leaf_nodes": [31, 63], "model__learning_rate": [0.03, 0.05, 0.1],
+         "model__min_samples_leaf": [10, 20, 50], "model__max_iter": [200, 300]},
         n_iter=n_iter, cv=TimeSeriesSplit(n_splits=4),
         scoring="neg_mean_absolute_error", n_jobs=-1, random_state=SEED)
-    rs.fit(df, np.log(df["posted_rate"] / df["distance"]))
+    sw = _distance_weights(df)
+    rs.fit(df, np.log(df["posted_rate"] / df["distance"]), model__sample_weight=sw)
     return {"best_params": rs.best_params_, "best_mae_logrpm": float(-rs.best_score_)}
 
 
@@ -408,11 +412,43 @@ def main() -> None:
         print(name, {k: v for k, v in res.items() if k != "held_out_cities"})
 
     # ---- final production pipeline (single source of truth, serialized)
-    pipe = make_pipeline()
-    clean = train_raw[~train_raw["is_corrupt"]]
-    pipe.fit(clean, np.log(clean["posted_rate"] / clean["distance"]))
+    # Preprocessing fit on ALL train rows (inputs only; labels never set input
+    # medians); HGB fit on clean rows with sample_weight=distance + smearing.
+    # Reuse the same fitted transformer objects so pipe.predict == functional.
+    prep = fit_preprocessors(train_raw)
+    tr_t = transform(train_raw, prep)
+    mask = _train_mask(train_raw)
+    tr_clean = tr_t[~mask].copy()
+    sw_full = _distance_weights(tr_clean)
+    y_full = np.log(tr_clean["posted_rate"] / tr_clean["distance"])
+    model = make_model().fit(tr_clean[MODEL_FEATURES], y_full, sample_weight=sw_full)
+    pipe = Pipeline([
+        ("weight_distance", prep["_w"]),
+        ("market", prep["_m"]),
+        ("features", prep["_f"]),
+        ("select", ColumnSelector(columns=MODEL_FEATURES)),
+        ("model", model),
+    ])
     OUT.mkdir(exist_ok=True)
     joblib.dump(pipe, PIPE_PATH)
+
+    # Monitoring stats from the frozen imputers after a validation pass.
+    _ = pipe.predict(val_raw.head(1))  # prime last_stats_ (single-row parity)
+    single_stats = {
+        "market": dict(getattr(pipe.named_steps["market"], "last_stats_", {})),
+        "weight_distance": dict(getattr(pipe.named_steps["weight_distance"], "last_stats_", {})),
+    }
+    _ = pipe.predict(val_raw)
+    batch_stats = {
+        "market": dict(getattr(pipe.named_steps["market"], "last_stats_", {})),
+        "weight_distance": dict(getattr(pipe.named_steps["weight_distance"], "last_stats_", {})),
+    }
+    # Inductive parity: single-row transform must equal batch row transform.
+    _r1 = pipe.named_steps["weight_distance"].transform(val_raw.head(1))
+    _r1 = pipe.named_steps["market"].transform(_r1)
+    _rb = pipe.named_steps["weight_distance"].transform(val_raw)
+    _rb = pipe.named_steps["market"].transform(_rb)
+    assert np.isclose(_r1["market_index"].iloc[0], _rb["market_index"].iloc[0]), "inductive parity broken"
 
     # ---- validation predictions (pipeline path, validated independently)
     val_pred = np.clip(np.exp(pipe.predict(val_raw)) * val_raw["distance"].to_numpy(), 1.0, None)
@@ -431,15 +467,23 @@ def main() -> None:
     dec = december.copy()
     for col in ["pickup_lat", "pickup_lon", "delivery_lat", "delivery_lon"]:
         dec[col] = lane[col]
-    # market_index is a provided *input* feature: use the December daily median from validation.csv
-    # (no labels involved); fall back to the December monthly median for any missing date.
-    vm = val_raw.groupby("date")["market_index"].median()
-    dec_median = val_raw.loc[val_raw["date"] >= "2025-12-01", "market_index"].median()
-    dec["market_index"] = dec["date"].map(vm).fillna(dec_median)
+    # market_index is a provided *input* feature: inductive lookup only.
+    # Use frozen training month/dow medians keyed by December date (no labels,
+    # no peeking at validation batch statistics).
+    mkt = pipe.named_steps["market"]
+    dec["date"] = pd.to_datetime(dec["date"])
+    dec["market_index"] = dec["date"].map(mkt.date_map_)
+    miss = dec["market_index"].isna()
+    if miss.any():
+        dec.loc[miss, "market_index"] = dec.loc[miss, "date"].dt.strftime("%Y-%m").map(mkt.month_map_)
+    miss = dec["market_index"].isna()
+    if miss.any():
+        dec.loc[miss, "market_index"] = dec.loc[miss, "date"].dt.dayofweek.map(mkt.dow_map_)
+    dec["market_index"] = dec["market_index"].fillna(mkt.global_)
     dec["weight"] = dec["weight"].astype(float)
     dec_pred = np.clip(np.exp(pipe.predict(dec)) * dec["distance"].to_numpy(), 1.0, None)
     dec_out = december.copy()
-    dec_out["date"] = dec_out["date"].dt.strftime("%Y-%m-%d")
+    dec_out["date"] = dec_out["date"].dt.strftime("%Y-%m-%d") if hasattr(dec_out["date"], "dt") else pd.to_datetime(dec_out["date"]).dt.strftime("%Y-%m-%d")
     dec_out["predicted_rate"] = np.round(dec_pred, 2)
     assert len(dec_out) == 31 and dec_out["predicted_rate"].gt(0).all()
 
@@ -449,10 +493,28 @@ def main() -> None:
     metrics["december_mean_rate"] = round(float(dec_out["predicted_rate"].mean()), 2)
     metrics["december_peak"] = {"date": dec_out.loc[dec_out["predicted_rate"].idxmax(), "date"],
                                 "rate": float(dec_out["predicted_rate"].max())}
-    metrics["feature_set"] = FEATURES
+    metrics["feature_set"] = MODEL_FEATURES
+    metrics["model"] = {
+        "type": "DollarHGBRegressor",
+        "smearing": round(float(pipe.named_steps["model"].smearing_), 4),
+        "categorical_features": CAT_FEATURES,
+        "sample_weight": "distance",
+    }
+    metrics["monitoring"] = {
+        "single_row_stats": single_stats,
+        "batch_stats": batch_stats,
+        "global_fallback_rate": batch_stats["market"].get("global_fallback_rate", 0.0),
+    }
+    # Unseen-lane rate on validation (drift guard: alert if > 15%).
+    train_lanes = set(train_raw["pickup"].astype(str) + "__" + train_raw["delivery"].astype(str))
+    va_lanes = val_raw["pickup"].astype(str) + "__" + val_raw["delivery"].astype(str)
+    metrics["monitoring"]["unseen_lane_rate"] = float((~va_lanes.isin(train_lanes)).mean())
     METRICS.parent.mkdir(parents=True, exist_ok=True)
     METRICS.write_text(json.dumps(metrics, indent=2))
     print(f"Validation mean ${out['predicted_rate'].mean():.2f}; December mean ${metrics['december_mean_rate']:.2f}")
+    print(f"Smearing S={pipe.named_steps['model'].smearing_:.4f}; "
+          f"global_fallback={metrics['monitoring']['global_fallback_rate']:.4f}; "
+          f"unseen_lane={metrics['monitoring']['unseen_lane_rate']:.3f}")
     print("Wrote validation_predictions.csv, output/validation_predictions.csv, output/december_predictions.csv, metrics.json, pipeline.joblib")
 
 

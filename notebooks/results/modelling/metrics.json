@@ -1,113 +1,113 @@
 {
   "Fold 1 (Jul-Aug)": {
-    "clean_mae": 52.02,
-    "clean_rmse": 76.56,
-    "clean_mape_pct": 2.18,
-    "all_row_mae": 104.03
+    "clean_mae": 43.09,
+    "clean_rmse": 62.55,
+    "clean_mape_pct": 1.84,
+    "all_row_mae": 95.23
   },
   "Fold 2 (Aug-Sep)": {
-    "clean_mae": 48.52,
-    "clean_rmse": 70.98,
-    "clean_mape_pct": 2.12,
-    "all_row_mae": 99.15
+    "clean_mae": 39.28,
+    "clean_rmse": 57.93,
+    "clean_mape_pct": 1.69,
+    "all_row_mae": 90.08
   },
   "Fold 3 (Sep-Oct)": {
-    "clean_mae": 68.27,
-    "clean_rmse": 94.91,
-    "clean_mape_pct": 2.98,
-    "all_row_mae": 124.01
+    "clean_mae": 66.05,
+    "clean_rmse": 90.25,
+    "clean_mape_pct": 2.84,
+    "all_row_mae": 121.81
   },
   "Fold 4 (Oct only)": {
-    "clean_mae": 66.7,
-    "clean_rmse": 90.41,
-    "clean_mape_pct": 2.95,
-    "all_row_mae": 126.91
+    "clean_mae": 66.71,
+    "clean_rmse": 89.71,
+    "clean_mape_pct": 2.93,
+    "all_row_mae": 126.86
   },
   "ablation_market_index": {
     "with_market_index": {
       "Fold 1 (Jul-Aug)": {
-        "clean_mae": 52.02,
-        "clean_rmse": 76.56,
-        "clean_mape_pct": 2.18,
-        "all_row_mae": 104.03
+        "clean_mae": 43.09,
+        "clean_rmse": 62.55,
+        "clean_mape_pct": 1.84,
+        "all_row_mae": 95.23
       },
       "Fold 2 (Aug-Sep)": {
-        "clean_mae": 48.52,
-        "clean_rmse": 70.98,
-        "clean_mape_pct": 2.12,
-        "all_row_mae": 99.15
+        "clean_mae": 39.28,
+        "clean_rmse": 57.93,
+        "clean_mape_pct": 1.69,
+        "all_row_mae": 90.08
       },
       "Fold 3 (Sep-Oct)": {
-        "clean_mae": 68.27,
-        "clean_rmse": 94.91,
-        "clean_mape_pct": 2.98,
-        "all_row_mae": 124.01
+        "clean_mae": 66.05,
+        "clean_rmse": 90.25,
+        "clean_mape_pct": 2.84,
+        "all_row_mae": 121.81
       },
       "Fold 4 (Oct only)": {
-        "clean_mae": 66.7,
-        "clean_rmse": 90.41,
-        "clean_mape_pct": 2.95,
-        "all_row_mae": 126.91
+        "clean_mae": 66.71,
+        "clean_rmse": 89.71,
+        "clean_mape_pct": 2.93,
+        "all_row_mae": 126.86
       }
     },
     "without_market_index": {
       "Fold 1 (Jul-Aug)": {
-        "clean_mae": 74.16,
-        "clean_rmse": 105.48,
-        "clean_mape_pct": 3.08,
-        "all_row_mae": 125.81
+        "clean_mae": 90.89,
+        "clean_rmse": 127.65,
+        "clean_mape_pct": 3.67,
+        "all_row_mae": 142.25
       },
       "Fold 2 (Aug-Sep)": {
-        "clean_mae": 61.57,
-        "clean_rmse": 88.23,
-        "clean_mape_pct": 2.57,
-        "all_row_mae": 111.99
+        "clean_mae": 41.09,
+        "clean_rmse": 59.92,
+        "clean_mape_pct": 1.74,
+        "all_row_mae": 91.83
       },
       "Fold 3 (Sep-Oct)": {
-        "clean_mae": 60.22,
-        "clean_rmse": 85.18,
-        "clean_mape_pct": 2.62,
-        "all_row_mae": 116.03
+        "clean_mae": 56.25,
+        "clean_rmse": 80.3,
+        "clean_mape_pct": 2.42,
+        "all_row_mae": 112.12
       },
       "Fold 4 (Oct only)": {
-        "clean_mae": 64.24,
-        "clean_rmse": 87.74,
-        "clean_mape_pct": 2.83,
-        "all_row_mae": 124.52
+        "clean_mae": 64.73,
+        "clean_rmse": 87.03,
+        "clean_mape_pct": 2.81,
+        "all_row_mae": 124.93
       }
     },
     "denoised_daily_median": {
       "Fold 1 (Jul-Aug)": {
-        "clean_mae": 51.14,
-        "clean_rmse": 75.73,
-        "clean_mape_pct": 2.15,
-        "all_row_mae": 103.17
+        "clean_mae": 65.31,
+        "clean_rmse": 93.2,
+        "clean_mape_pct": 2.68,
+        "all_row_mae": 117.07
       },
       "Fold 2 (Aug-Sep)": {
-        "clean_mae": 49.12,
-        "clean_rmse": 72.11,
-        "clean_mape_pct": 2.14,
-        "all_row_mae": 99.75
+        "clean_mae": 58.88,
+        "clean_rmse": 83.4,
+        "clean_mape_pct": 2.43,
+        "all_row_mae": 109.34
       },
       "Fold 3 (Sep-Oct)": {
-        "clean_mae": 68.84,
-        "clean_rmse": 95.39,
-        "clean_mape_pct": 3.01,
-        "all_row_mae": 124.56
+        "clean_mae": 49.43,
+        "clean_rmse": 70.46,
+        "clean_mape_pct": 2.16,
+        "all_row_mae": 105.42
       },
       "Fold 4 (Oct only)": {
-        "clean_mae": 67.02,
-        "clean_rmse": 91.07,
-        "clean_mape_pct": 2.95,
-        "all_row_mae": 127.25
+        "clean_mae": 56.13,
+        "clean_rmse": 78.53,
+        "clean_mape_pct": 2.46,
+        "all_row_mae": 116.48
       }
     }
   },
   "Unseen-city holdout (Sep-Oct)": {
-    "clean_mae": 81.56,
-    "clean_rmse": 107.02,
-    "clean_mape_pct": 3.32,
-    "all_row_mae": 142.68,
+    "clean_mae": 84.25,
+    "clean_rmse": 106.88,
+    "clean_mape_pct": 3.51,
+    "all_row_mae": 145.36,
     "held_out_cities": [
       "Jacksonville",
       "Little Rock",
@@ -117,10 +117,10 @@
       "Tucson"
     ]
   },
-  "december_mean_rate": 803.06,
+  "december_mean_rate": 796.61,
   "december_peak": {
-    "date": "2025-12-03",
-    "rate": 810.04
+    "date": "2025-12-31",
+    "rate": 806.71
   },
   "feature_set": [
     "pickup_lat",
@@ -140,6 +140,61 @@
     "doy_sin",
     "doy_cos",
     "equip_x_logdist",
-    "is_weekend"
-  ]
+    "is_weekend",
+    "pickup_cat",
+    "delivery_cat",
+    "equipment_cat"
+  ],
+  "model": {
+    "type": "DollarHGBRegressor",
+    "smearing": 1.0001,
+    "categorical_features": [
+      "pickup_cat",
+      "delivery_cat",
+      "equipment_cat"
+    ],
+    "sample_weight": "distance"
+  },
+  "monitoring": {
+    "single_row_stats": {
+      "market": {
+        "n": 1,
+        "n_missing": 0,
+        "n_date_hit": 0,
+        "n_month_hit": 0,
+        "n_dow_hit": 0,
+        "n_global_fallback": 0,
+        "global_fallback_rate": 0.0,
+        "missing_rate": 0.0
+      },
+      "weight_distance": {
+        "n": 1,
+        "n_weight_imputed": 0,
+        "n_distance_imputed": 0,
+        "weight_fallback_rate": 0.0,
+        "distance_fallback_rate": 0.0
+      }
+    },
+    "batch_stats": {
+      "market": {
+        "n": 12000,
+        "n_missing": 249,
+        "n_date_hit": 0,
+        "n_month_hit": 0,
+        "n_dow_hit": 249,
+        "n_global_fallback": 0,
+        "global_fallback_rate": 0.0,
+        "missing_rate": 0.02075
+      },
+      "weight_distance": {
+        "n": 12000,
+        "n_weight_imputed": 165,
+        "n_distance_imputed": 0,
+        "weight_fallback_rate": 0.01375,
+        "distance_fallback_rate": 0.0
+      }
+    },
+    "global_fallback_rate": 0.0,
+    "unseen_lane_rate": 0.12175
+  }
 }
