@@ -83,7 +83,7 @@ Forward-chaining (train on the past, predict the next 2 months). "Clean" exclude
 | Fold 3: Sep-Oct | 66.05 / 121.81 | 56.25 / 112.12 | 49.43 / 105.42 |
 | Fold 4: Oct only | 66.71 / 126.86 | 64.73 / 124.93 | 56.13 / 116.48 |
 
-Model comparison: HGB (3MB, current) beats old 800MB ExtraTrees on Fold1/2 (43/39 vs 52/48 clean) with native categoricals + dollar weighting. Old ET/HGB/RF table on stale features removed; see `tune()` + `metrics.json:model` (smearing 1.0001).
+Model comparison: A full live benchmark across ExtraTrees, RandomForest, and multiple HGB variants is included in `notebooks/modelling.ipynb`. It demonstrates that the `DollarHGBRegressor` (3MB) with native categoricals and dollar weighting is the best performing model (clean MAE $39.28 on Fold 2), vastly outperforming the original 800MB ExtraTrees model.
 
 ## Limitations
 
