@@ -1,113 +1,113 @@
 {
   "Fold 1 (Jul-Aug)": {
-    "clean_mae": 58.45,
-    "clean_rmse": 82.04,
-    "clean_mape_pct": 2.46,
-    "all_row_mae": 110.42
+    "clean_mae": 52.02,
+    "clean_rmse": 76.56,
+    "clean_mape_pct": 2.18,
+    "all_row_mae": 104.03
   },
   "Fold 2 (Aug-Sep)": {
-    "clean_mae": 59.27,
-    "clean_rmse": 84.89,
-    "clean_mape_pct": 2.53,
-    "all_row_mae": 109.73
+    "clean_mae": 48.52,
+    "clean_rmse": 70.98,
+    "clean_mape_pct": 2.12,
+    "all_row_mae": 99.15
   },
   "Fold 3 (Sep-Oct)": {
-    "clean_mae": 75.44,
-    "clean_rmse": 103.56,
-    "clean_mape_pct": 3.19,
-    "all_row_mae": 131.04
+    "clean_mae": 68.27,
+    "clean_rmse": 94.91,
+    "clean_mape_pct": 2.98,
+    "all_row_mae": 124.01
   },
   "Fold 4 (Oct only)": {
-    "clean_mae": 84.73,
-    "clean_rmse": 111.75,
-    "clean_mape_pct": 3.58,
-    "all_row_mae": 144.63
+    "clean_mae": 66.7,
+    "clean_rmse": 90.41,
+    "clean_mape_pct": 2.95,
+    "all_row_mae": 126.91
   },
   "ablation_market_index": {
     "with_market_index": {
       "Fold 1 (Jul-Aug)": {
-        "clean_mae": 58.45,
-        "clean_rmse": 82.04,
-        "clean_mape_pct": 2.46,
-        "all_row_mae": 110.42
+        "clean_mae": 52.02,
+        "clean_rmse": 76.56,
+        "clean_mape_pct": 2.18,
+        "all_row_mae": 104.03
       },
       "Fold 2 (Aug-Sep)": {
-        "clean_mae": 59.27,
-        "clean_rmse": 84.89,
-        "clean_mape_pct": 2.53,
-        "all_row_mae": 109.73
+        "clean_mae": 48.52,
+        "clean_rmse": 70.98,
+        "clean_mape_pct": 2.12,
+        "all_row_mae": 99.15
       },
       "Fold 3 (Sep-Oct)": {
-        "clean_mae": 75.44,
-        "clean_rmse": 103.56,
-        "clean_mape_pct": 3.19,
-        "all_row_mae": 131.04
+        "clean_mae": 68.27,
+        "clean_rmse": 94.91,
+        "clean_mape_pct": 2.98,
+        "all_row_mae": 124.01
       },
       "Fold 4 (Oct only)": {
-        "clean_mae": 84.73,
-        "clean_rmse": 111.75,
-        "clean_mape_pct": 3.58,
-        "all_row_mae": 144.63
+        "clean_mae": 66.7,
+        "clean_rmse": 90.41,
+        "clean_mape_pct": 2.95,
+        "all_row_mae": 126.91
       }
     },
     "without_market_index": {
       "Fold 1 (Jul-Aug)": {
-        "clean_mae": 71.98,
-        "clean_rmse": 105.65,
-        "clean_mape_pct": 2.97,
-        "all_row_mae": 123.67
+        "clean_mae": 74.16,
+        "clean_rmse": 105.48,
+        "clean_mape_pct": 3.08,
+        "all_row_mae": 125.81
       },
       "Fold 2 (Aug-Sep)": {
-        "clean_mae": 45.47,
-        "clean_rmse": 66.26,
-        "clean_mape_pct": 1.93,
-        "all_row_mae": 96.09
+        "clean_mae": 61.57,
+        "clean_rmse": 88.23,
+        "clean_mape_pct": 2.57,
+        "all_row_mae": 111.99
       },
       "Fold 3 (Sep-Oct)": {
-        "clean_mae": 48.72,
-        "clean_rmse": 70.32,
-        "clean_mape_pct": 2.08,
-        "all_row_mae": 104.7
+        "clean_mae": 60.22,
+        "clean_rmse": 85.18,
+        "clean_mape_pct": 2.62,
+        "all_row_mae": 116.03
       },
       "Fold 4 (Oct only)": {
-        "clean_mae": 50.88,
-        "clean_rmse": 72.99,
-        "clean_mape_pct": 2.17,
-        "all_row_mae": 111.37
+        "clean_mae": 64.24,
+        "clean_rmse": 87.74,
+        "clean_mape_pct": 2.83,
+        "all_row_mae": 124.52
       }
     },
     "denoised_daily_median": {
       "Fold 1 (Jul-Aug)": {
-        "clean_mae": 58.94,
-        "clean_rmse": 82.27,
-        "clean_mape_pct": 2.49,
-        "all_row_mae": 110.9
+        "clean_mae": 51.14,
+        "clean_rmse": 75.73,
+        "clean_mape_pct": 2.15,
+        "all_row_mae": 103.17
       },
       "Fold 2 (Aug-Sep)": {
-        "clean_mae": 63.51,
-        "clean_rmse": 90.62,
-        "clean_mape_pct": 2.7,
-        "all_row_mae": 113.91
+        "clean_mae": 49.12,
+        "clean_rmse": 72.11,
+        "clean_mape_pct": 2.14,
+        "all_row_mae": 99.75
       },
       "Fold 3 (Sep-Oct)": {
-        "clean_mae": 78.93,
-        "clean_rmse": 108.14,
-        "clean_mape_pct": 3.33,
-        "all_row_mae": 134.49
+        "clean_mae": 68.84,
+        "clean_rmse": 95.39,
+        "clean_mape_pct": 3.01,
+        "all_row_mae": 124.56
       },
       "Fold 4 (Oct only)": {
-        "clean_mae": 87.37,
-        "clean_rmse": 115.15,
-        "clean_mape_pct": 3.68,
-        "all_row_mae": 147.28
+        "clean_mae": 67.02,
+        "clean_rmse": 91.07,
+        "clean_mape_pct": 2.95,
+        "all_row_mae": 127.25
       }
     }
   },
   "Unseen-city holdout (Sep-Oct)": {
-    "clean_mae": 89.97,
-    "clean_rmse": 118.02,
-    "clean_mape_pct": 3.49,
-    "all_row_mae": 150.83,
+    "clean_mae": 81.56,
+    "clean_rmse": 107.02,
+    "clean_mape_pct": 3.32,
+    "all_row_mae": 142.68,
     "held_out_cities": [
       "Jacksonville",
       "Little Rock",
@@ -117,9 +117,29 @@
       "Tucson"
     ]
   },
-  "december_mean_rate": 823.25,
+  "december_mean_rate": 803.06,
   "december_peak": {
-    "date": "2025-12-31",
-    "rate": 833.69
-  }
+    "date": "2025-12-03",
+    "rate": 810.04
+  },
+  "feature_set": [
+    "pickup_lat",
+    "pickup_lon",
+    "delivery_lat",
+    "delivery_lon",
+    "distance",
+    "circuity",
+    "weight",
+    "weight_per_mile",
+    "equipment_code",
+    "lane_freq",
+    "market_index",
+    "days_to_quarter_end",
+    "dow_sin",
+    "dow_cos",
+    "doy_sin",
+    "doy_cos",
+    "equip_x_logdist",
+    "is_weekend"
+  ]
 }
