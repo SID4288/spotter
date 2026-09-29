@@ -16,14 +16,14 @@ source venv/bin/activate          # Windows PowerShell: venv\Scripts\Activate.ps
 python -m pip install -r requirements.txt
 python -m pip install notebook      # only needed to open the notebooks
 
-python train.py                   # regenerates outputs + metrics.json + 3MB pipeline.joblib
+# Note: The 3MB pipeline.joblib is already tracked in this repo! You can jump straight to evaluation.
+# If you DO want to re-run the 4-fold cross-validation and retrain the model (~3 minutes):
+# python train.py
+
+# Evaluate the pre-generated predictions:
 python score.py --predictions output/validation_predictions.csv --december-predictions output/december_predictions.csv
-# PowerShell multi-line (use backtick, not `\`):
-# python score.py --predictions output/validation_predictions.csv `
-#                 --december-predictions output/december_predictions.csv
-# Production guards (slices + drift, CI-gated):
-# python score.py --predictions output/validation_predictions.csv --december-predictions output/december_predictions.csv --validation-inputs data/validation.csv --train-data data/train_test.csv --metrics-json notebooks/results/modelling/metrics.json --fail-on-drift
-# Single-row inference (~22ms warm, budget 50ms):
+
+# Single-row inference using the pre-trained pipeline (~22ms warm, budget 50ms):
 # python predict.py --file payload.json
 ```
 
